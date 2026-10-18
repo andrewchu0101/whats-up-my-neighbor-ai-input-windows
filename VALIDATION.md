@@ -1,5 +1,17 @@
 # Windows 驗證與交接
 
+## 獨立 repo 拆分驗證 — 2026-10-18
+
+[Windows migration CI 39093885104](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/actions/runs/39093885104) 已在提交 `fcb30edbe20d1b2fb4ed5d52ec7e0baf7e07b739` 通過 **319 項離線核心／平台測試、93 項受控桌面 UI 測試，以及安裝、啟動、合成前版升級與解除安裝流程**。這次驗證確認獨立 repo 的根目錄路徑、授權打包與更新後的 publisher 連結可正常建置。
+
+本次 CI 的開發用 EXE 為 **2,816,004 bytes**，SHA-256 `5043f0732e43ba90bb46249edcdc42c38b9a24d5211b313b99e44c28e926cf5b`；manifest 與逐項證據在同次 CI 的 `neighbor-windows-x64` artifact。此 CI 產物未另行發布為新版。
+
+新 repo 的 `windows-v0.1.0-beta.1` 預發布頁提供的是**歷史 beta 原樣搬遷附件**，EXE 為 **2,815,954 bytes**，SHA-256 `f364149e795448d72fc787c64cb4157e175be5c5c8b5b108b484dedf9bb42d91`；其 manifest 仍指向原始提交。兩種產物不可混用雜湊或驗證來源。詳見 [MIGRATION.md](MIGRATION.md)。
+
+Windows Server 2022 的合成資料驗證不取代真實 Windows 10／11 麥克風、藍牙、IME 或第三方 App 驗收。以下原始發布紀錄及歷史 CI 連結保留作為來源證據。
+
+## 原始 beta 發布驗證
+
 本輪 Windows 自動驗證已通過：**309 項離線核心／平台測試、93 項受控桌面 UI 測試，以及安裝、啟動、合成前版升級與解除安裝流程**。這是預發布測試版；真實麥克風、Groq 帳號與一般使用者軟體仍待實機驗收。
 
 ## 驗證環境與交付識別
