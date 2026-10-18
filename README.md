@@ -1,10 +1,12 @@
-# What's up my neighbor — Windows 測試版
+# What's up my neighbor AI Input — Windows
+
+Windows 獨立 repo；macOS 版請見 [Mac repo](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-macos)。目前仍為預發布測試版，實機待驗收項目見 [VALIDATION.md](VALIDATION.md)，拆分紀錄見 [MIGRATION.md](MIGRATION.md)。
 
 小黑貓語音輸入工具：按快捷鍵說話，再按一次完成，透過 Groq 辨識並把文字貼入目前的輸入框。只貼上，不會自動傳送訊息。
 
 ## 下載與開始使用
 
-到本專案 [Releases](https://github.com/yuipan0611/groq-ai-voice-input-macos/releases) 找名稱含 **Windows** 的預發布版本，下載 `Neighbor-Setup-…-x64.exe`。不需要下載原始碼或安裝 Python、Node.js、開發工具。
+到本專案 [Releases](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/releases) 找名稱含 **Windows** 的預發布版本，下載 `Neighbor-Setup-…-x64.exe`。不需要下載原始碼或安裝 Python、Node.js、開發工具。
 
 1. 執行安裝程式，安裝到目前 Windows 使用者的個人資料夾。
 2. 從開始功能表開啟 **What's up my neighbor**，右下角系統匣會出現黑貓。
@@ -49,10 +51,10 @@ Windows 開發環境需 .NET SDK、.NET Framework 4.8 targeting pack（亦可由
 執行依賴固定為 NAudio.Wasapi／NAudio.Core 2.2.1 與 Interop.UIAutomationClient 10.19041.0。後者只提供 Windows 原生文字介面的呼叫宣告；不附加另一套桌面執行環境。安裝包使用明確檔案清單，排除測試、除錯符號、SDK、模型與測試音訊。
 
 ```powershell
-./windows/scripts/build.ps1
-./windows/Neighbor.Tests/bin/Release/net48/Neighbor.Tests.exe --interactive
-./windows/scripts/package.ps1
-./windows/scripts/test-install.ps1
+./scripts/build.ps1
+./Neighbor.Tests/bin/Release/net48/Neighbor.Tests.exe --interactive
+./scripts/package.ps1
+./scripts/test-install.ps1
 ```
 
 整合測試只應在測試用桌面執行：會開啟隔離文字視窗並使用剪貼簿。測試不讀正式金鑰、不錄真實麥克風、不呼叫 Groq。安裝檔必須小於 20,000,000 bytes。

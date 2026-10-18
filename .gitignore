@@ -1,16 +1,7 @@
 .DS_Store
-build/
-dist/
-*.zip
-*.m4a
-.swiftpm/
-.build/
-xcuserdata/
-*.xcuserstate
-
-# Windows build outputs and local agent context
 **/bin/
 **/obj/
+dist/
 .codex/
 __pycache__/
 *.pyc

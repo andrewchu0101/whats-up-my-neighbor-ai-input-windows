@@ -1,0 +1,11 @@
+# What's up my neighbor AI Input — Windows 隱私說明
+
+使用者主動錄音後，音訊與額度內的啟用詞條會直接送至 Groq transcription API，模型為 `whisper-large-v3`。沒有開發者帳號系統、聊天改寫或供應商備援；Groq 的資料保存與帳務由其服務政策決定。
+
+API Key 存在目前帳號的 Windows 認證管理員，目標 `WhatsUpMyNeighbor/GroqApiKey`。設定、詞典與短詞修正紀錄位於 `%LOCALAPPDATA%\WhatsUpMyNeighbor`。App 不建立日常完整逐字稿或金鑰日誌。
+
+錄音成功複製、取消、捨棄或被新錄音取代時刪除；辨識、網路或剪貼簿失敗時最多保留兩分鐘供使用者重試，正常退出及下次啟動也清理。文字交付會使用 Windows 剪貼簿，其歷程與同步由 Windows 使用者設定管理。
+
+可驗證的輸入框才會自動貼上；修字觀察限本次插入範圍，範圍失效即停止學習。短詞候選可在詞典管理中確認、拒絕或刪除；學習是提示詞管理，不是模型訓練。
+
+升級保留設定、詞典與金鑰；解除安裝預設保留詞典與金鑰。完全清除時，先在 App 移除金鑰，再自行刪除上述個人資料夾。詳細行為與限制請見 [README](README.md) 與 [驗證紀錄](VALIDATION.md)。
