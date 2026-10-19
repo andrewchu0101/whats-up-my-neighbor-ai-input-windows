@@ -9,7 +9,7 @@ macOS 版在另一個 repo：<https://github.com/yuipan0611/whats-up-my-neighbor
 到 [Issues](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/issues) 開一個 Issue，盡量寫下：
 
 - **環境**：Windows 版本（例如 Windows 11 23H2）、x64 或 ARM64、輸入法（注音、倉頡、微軟拼音⋯⋯）、使用的麥克風或藍牙耳機。
-- **App 版本**：系統匣黑貓選單顯示的版本。
+- **App 版本**：系統匣選單目前不顯示版本，請寫安裝檔名稱（例如 `Neighbor-Setup-0.1.0-beta.1-x64.exe`），或 Windows「設定 → 應用程式 → 已安裝的應用程式」裡 What's up my neighbor 顯示的版本。
 - **在哪個 App 裡輸入**：例如 Chrome 的某個網站、LINE、Word、VS Code。
 - **步驟、預期與實際結果**，以及畫面上的錯誤訊息原文。
 
