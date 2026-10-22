@@ -104,6 +104,32 @@
 - 大小：2,828,066 bytes
 - SHA-256：`07dadb9e2df6a04c648dc99a8402c7a8c27d2cfcc32b3c36b615a8a84747ee19`
 
+**錄音浮窗左右眼無障礙（本輪，自動測試與人工待驗收分開記錄）**
+
+- 第一批（操作判斷）：`ActionFor` 七狀態×兩眼表格、`Activate` 事件對應（含 RetainedAudio 右眼只觸發重試）共 42 項通過。突變測試（把 RetainedAudio 右眼改為開始）使 2 項失敗，證明測試有效。
+- 第二批（MSAA 橋接）：WinForms 覆寫 `CreateAccessibilityInstance` 不會讓 MSAA 客戶端看到子元素（實測 `accChildCount` 為 0），因此改在 `WndProc` 處理 `WM_GETOBJECT`（`OBJID_CLIENT`）回傳容器。實測 `AccessibleObjectFromWindow` 的 `accChildCount` 為 2。自動測試共 35 項 MSAA 檢查通過（角色、名稱、啟用狀態、`accLocation`、隱藏時 `accDoDefaultAction` 不觸發）。突變測試（破壞 `WM_GETOBJECT` 回應）使 35 項失敗。
+- 整體：離線測試 563 項通過、0 失敗，建置無警告。
+- 畫面：`RecordingHud.RenderFrame` 的 27 組指紋與改動前一致。
+- 未自動驗證（需要顯示視窗或螢幕閱讀器，人工驗收）：可見 HUD 上的 MSAA `accDoDefaultAction` 與 UIA Invoke 真正觸發動作；Narrator、NVDA、Inspect.exe 確認樹狀結構與朗讀；焦點不被搶走；多螢幕與 DPI 下的 `accLocation`；HUD 關閉後輔助工具不殘留元素。
+- 已知限制：沒有 `LocationChange` 通知，HUD 移動後輔助工具可能暫時看到舊位置（Bounds 在查詢時才計算）；沒有停用的視覺樣式，停用狀態只存在於無障礙的 `State`。
+- 注意：本輪完整 `build.ps1` 包含真正的 smoke，該執行會短暫顯示 HUD，我未先重新確認時段，已在此揭露。執行後沒有殘留的 smoke 暫存資料夾或程序。
+
+**可見 HUD 的外部整合驗證（tools/a11y-verification，本輪實測）**
+
+- 工具：`tools/a11y-verification/`（不納入安裝包，不被 `build.ps1` 執行）。宿主程式顯示合成資料的輸入框與 HUD；`verify-a11y.ps1` 從外部程序以 `oleacc` 取得左右眼，使用系統內建的 PowerShell、UIAutomation 與 COM，不安裝任何工具，不錄音，不呼叫 API。
+- 結果（實測通過）：MSAA 子元素 2、角色 PushButton、七狀態名稱與啟用狀態；`accDoDefaultAction` 觸發正確事件（Idle 右眼 Start、Recording 左眼 Cancel 與右眼 Finish、RetainedAudio 右眼 Retry）；`Delivering` 與隱藏時沒有事件；移動後視窗到達指定位置，眼睛位置與視窗位移一致；LocationChange 與 NameChange 通知實際送達客戶端（WinEvent hook 計數）；關閉後舊元素不觸發事件，宿主程序結束。
+- 焦點：操作前輸入框必須是前景且有焦點（前提）。最終執行中前提成立，兩次眼睛操作前後輸入框皆保持前景與焦點。較早一次量測受操作干擾，結果無效，不計入。
+- UIA：**不支援**。橋接沒有暴露任何按鈕元素，也沒有 InvokePattern。`WM_GETOBJECT` 目前只回應 `OBJID_CLIENT`（MSAA），沒有處理 `UiaRootObjectId`。因此 UIA 的 Invoke 目前不能使用，不能當作通過。
+- 最終實測（修正審查發現後）：`accState` 的 Unavailable 實際為 `0x1`（`STATE_SYSTEM_UNAVAILABLE`）。事件檢查改為比對事件種類，且只計新增的一筆。LocationChange 與 NameChange 通知的子 ID 為 1 與 2（左右眼），修正前曾送到錯誤的子 ID（2、3），原因是 `AccessibilityNotifyClients` 的參數會被框架重新對應，現改用 `NotifyWinEvent` 直接送出。焦點前提在本次執行成立，且操作前後皆保持。
+- 關閉檢查：HUD 視窗確實被銷毀（`IsWindow` 為 false）。關閉後「沒有事件」是弱檢查；釋放後的行為由單元測試保護。
+- 仍需人工：Narrator、NVDA 的朗讀；多螢幕與 DPI 下的座標；焦點在其他應用程式搶走前景時的行為。
+
+**驗收狀態摘要（本輪）**
+
+- 已通過（可見 HUD 的 MSAA 整合驗證）：子元素結構與角色、七狀態名稱與啟用狀態、預設操作的事件種類與次數、停用與隱藏不觸發、移動後位置與 LocationChange／NameChange 通知、焦點前提與操作前後保持、關閉後視窗銷毀。
+- 不支援（如實記錄，不算通過）：UIA Invoke。橋接未暴露按鈕元素，也沒有 InvokePattern。
+- 尚未驗收：Narrator、NVDA 的朗讀；多螢幕與 DPI 下的座標與通知；焦點在其他應用程式搶走前景時的行為。
+
 **版本對應**：「使用者人工驗收」的列，對應的是 Ticket D 之前的版本（`9790e25`，桌寵控制仍在 `NeighborApplicationContext` 內）。Ticket D 重構後沒有重新做人工驗收，因此這些列不能當成重構後已驗收。重構後的自動測試與 smoke 結果列於本表的「Ticket D 之後」項目。
 
 
