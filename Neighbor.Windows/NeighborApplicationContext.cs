@@ -33,7 +33,7 @@ namespace Neighbor.Windows
         private readonly LearningEngine learning;
         private readonly RecordingHud hud;
         private readonly LearningToast toast;
-        private DesktopPetForm desktopPet;
+        private readonly DesktopPetController desktopPet;
         private VocabularyForm vocabularyForm;
         private VocabularyPrompt latestPrompt;
         private readonly ToolStripMenuItem statusItem = new ToolStripMenuItem("準備好了") { Enabled = false };
@@ -46,7 +46,8 @@ namespace Neighbor.Windows
         private bool exiting, learningBusy;
         private int smokeTicks;
         /// <summary>Smoke mode only: true when an optional component failed, so the process exits non-zero.</summary>
-        public bool Failed { get; private set; }
+        // Smoke mode only: true when the optional companion failed, so the process exits non-zero.
+        public bool Failed => smoke && desktopPet.Failed;
 
         public NeighborApplicationContext(bool smoke = false)
         {
@@ -68,7 +69,10 @@ namespace Neighbor.Windows
             learning = new LearningEngine(new WindowsWordSegmenter());
             hud = new RecordingHud(); hud.ApplySettings(settings);
             toast = new LearningToast();
-            CreateDesktopPet();
+            desktopPet = new DesktopPetController(() => new DesktopPetForm(),
+                (stage, error) => DiagnosticLog.Record(DiagnosticLog.DefaultPath, stage, error),
+                message => Post(() => Notify(message)));
+            desktopPet.Create();
             tray = new NotifyIcon { Icon = Theme.LoadIcon(), Text = ProductName, ContextMenuStrip = menu, Visible = true };
             BuildMenu();
             hotkeys.Pressed += id => Run(() => ToggleAsync(id == 2));
@@ -93,27 +97,7 @@ namespace Neighbor.Windows
             {
                 if (!hotkeys.TryApply(settings.PrimaryShortcut, settings.AlternateShortcut, out string error)) Post(() => Notify(error + " 可從系統匣開啟設定或開始錄音。"));
                 Post(FirstRun);
-                desktopPet?.Configure(settings.DesktopPetEnabled, false);
-            }
-        }
-        private void CreateDesktopPet()
-        {
-            // The companion is cosmetic: if it cannot start, the dictation app must still run.
-            try
-            {
-                desktopPet = new DesktopPetForm();
-                desktopPet.Failed += error => {
-                    if (smoke) Failed = true;
-                    DiagnosticLog.Record(DiagnosticLog.DefaultPath, "desktop-pet-run", error);
-                    Post(() => Notify("桌面小黑貓已暫停，聽寫功能不受影響。詳細原因見 diagnostics.log。"));
-                };
-            }
-            catch (Exception error)
-            {
-                if (smoke) Failed = true;
-                DiagnosticLog.Record(DiagnosticLog.DefaultPath, "desktop-pet-create", error);
-                desktopPet = null;
-                Post(() => Notify("無法建立桌面小黑貓，聽寫功能不受影響。詳細原因見 diagnostics.log。"));
+                desktopPet.SetEnabled(settings.DesktopPetEnabled);
             }
         }
         private void BuildMenu()
@@ -130,7 +114,7 @@ namespace Neighbor.Windows
             var petItem = new ToolStripMenuItem("桌面小黑貓散步") { Checked = settings.DesktopPetEnabled };
             petItem.Click += (_, e) => {
                 var updated = settings.Clone(); updated.DesktopPetEnabled = !settings.DesktopPetEnabled;
-                try { settingsStore.Save(updated); settings = updated; petItem.Checked = settings.DesktopPetEnabled; desktopPet?.Configure(settings.DesktopPetEnabled, coordinator.State != DictationState.Idle); }
+                try { settingsStore.Save(updated); settings = updated; petItem.Checked = settings.DesktopPetEnabled; desktopPet.SetEnabled(settings.DesktopPetEnabled); }
                 catch { Notify("無法儲存桌面小黑貓設定。"); }
             };
             menu.Items.Add(petItem);
@@ -167,7 +151,7 @@ namespace Neighbor.Windows
         private async Task CancelAsync() { CancelLearning("已取消"); await coordinator.CancelAsync(); }
         private void UpdateStatus(StatusEventArgs e)
         {
-            desktopPet?.Configure(settings.DesktopPetEnabled, e.State != DictationState.Idle);
+            desktopPet.SetBusy(e.State != DictationState.Idle);
             statusItem.Text = e.Message;
             tray.Text = ProductName + (e.State == DictationState.Recording ? " · 錄音中" : "");
             recordItem.Text = e.State == DictationState.Recording ? "完成錄音並辨識" : "開始錄音";
@@ -185,8 +169,8 @@ namespace Neighbor.Windows
             if (exiting) return;
             if (smoke)
             {
-                if (++smokeTicks == 1) { hud.UpdateState(DictationState.Recording, "測試錄音介面"); hud.Show(); hud.UpdateLevel(-20, true); desktopPet?.Configure(true, false); }
-                if (smokeTicks == 8) desktopPet?.Configure(false, false);
+                if (++smokeTicks == 1) { hud.UpdateState(DictationState.Recording, "測試錄音介面"); hud.Show(); hud.UpdateLevel(-20, true); desktopPet.SetEnabled(true); desktopPet.SetBusy(false); }
+                if (smokeTicks == 8) desktopPet.SetEnabled(false);
                 if (smokeTicks >= 10) await ExitAsync();
                 return;
             }
@@ -308,7 +292,7 @@ namespace Neighbor.Windows
             await coordinator.CancelAsync();
             audioStore.Cleanup();
             hud.Hide(); toast.Hide(); tray.Visible = false;
-            desktopPet?.Hide();
+            desktopPet.Hide();
             ExitThread();
         }
         protected override void Dispose(bool disposing)
@@ -317,7 +301,7 @@ namespace Neighbor.Windows
             {
                 timer.Dispose(); hideHud.Dispose(); hotkeys.Dispose(); recorder.Dispose(); delivery.Dispose(); transcriber.Dispose();
                 hud.Dispose(); toast.Dispose(); vocabularyForm?.Dispose();
-                desktopPet?.Dispose();
+                desktopPet.Dispose();
                 var icon = tray.Icon; tray.Dispose(); icon?.Dispose(); menu.Dispose(); dispatcher.Dispose();
                 if (smoke) { try { Directory.Delete(Path.GetDirectoryName(audioStore.DirectoryPath), true); } catch { } }
             }

@@ -44,6 +44,7 @@ namespace Neighbor.Tests
                         RunSuite("Desktop pet", () => DesktopPetTests.Run(Check));
                         RunSuite("Layered window", () => LayeredWindowTests.Run(Check));
                         RunSuite("Diagnostic log", () => DiagnosticLogTests.Run(Check));
+                        RunSuite("Desktop pet controller", () => DesktopPetControllerTests.Run(Check));
                     }
                 }
                 catch (Exception error) { Check(false, error.ToString()); }

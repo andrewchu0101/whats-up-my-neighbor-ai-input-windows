@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32;
 using Neighbor.Core;
+using Neighbor.Windows;
 
 namespace Neighbor.Windows.UI
 {
@@ -14,7 +15,7 @@ namespace Neighbor.Windows.UI
     /// Non-activating companion on a per-pixel alpha layered window. Transparent pixels pass
     /// clicks through; the cat body can be dragged, then walks horizontally at the dropped height.
     /// </summary>
-    public sealed class DesktopPetForm : NonActivatingForm
+    public sealed class DesktopPetForm : NonActivatingForm, IDesktopPetView
     {
         private const int Sprite = 128;
         private const int WsExLayered = 0x00080000;
