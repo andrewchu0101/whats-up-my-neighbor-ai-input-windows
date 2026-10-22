@@ -41,6 +41,7 @@ namespace Neighbor.Tests
                         RunSuite("Groq", () => GroqTests.RunAsync(Check).GetAwaiter().GetResult());
                         RunSuite("Platform", () => PlatformTests.Run(Check));
                         RunSuite("Settings", SettingsChecks);
+                        RunSuite("Desktop pet", () => DesktopPetTests.Run(Check));
                     }
                 }
                 catch (Exception error) { Check(false, error.ToString()); }

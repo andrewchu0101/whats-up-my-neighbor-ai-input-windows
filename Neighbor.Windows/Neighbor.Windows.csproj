@@ -19,5 +19,6 @@
     <Reference Include="System.Web.Extensions" /><Reference Include="System.Net.Http" />
     <EmbeddedResource Include="../assets/neko-base.png" LogicalName="Neighbor.cat.png" />
     <EmbeddedResource Include="../assets/neighbor.ico" LogicalName="Neighbor.cat.ico" />
+    <EmbeddedResource Include="../assets/desktop-pet/*.svg" LogicalName="Neighbor.pet.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
