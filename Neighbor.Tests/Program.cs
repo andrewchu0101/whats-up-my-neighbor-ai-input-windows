@@ -45,6 +45,7 @@ namespace Neighbor.Tests
                         RunSuite("Layered window", () => LayeredWindowTests.Run(Check));
                         RunSuite("Diagnostic log", () => DiagnosticLogTests.Run(Check));
                         RunSuite("Desktop pet controller", () => DesktopPetControllerTests.Run(Check));
+                        RunSuite("Scaled cat cache", () => ScaledCatCacheTests.Run(Check));
                     }
                 }
                 catch (Exception error) { Check(false, error.ToString()); }

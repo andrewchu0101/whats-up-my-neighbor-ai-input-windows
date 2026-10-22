@@ -14,6 +14,7 @@ namespace Neighbor.Windows.UI
     {
         private const int WS_EX_LAYERED = 0x00080000;
         private readonly Image cat = Theme.LoadCatImage();
+        private readonly ScaledCatCache catCache;
         private readonly ToolTip tips = new ToolTip();
         private DictationState state;
         private string message = "按快捷鍵開始說話";
@@ -34,6 +35,7 @@ namespace Neighbor.Windows.UI
             ClientSize = new Size(340, 220);
             StartPosition = FormStartPosition.Manual;
             AccessibleName = "小黑貓語音輸入";
+            catCache = new ScaledCatCache(cat);
             UpdateState(DictationState.Idle, message);
         }
 
@@ -87,7 +89,7 @@ namespace Neighbor.Windows.UI
                 // ClearType writes opaque color into the text pixels and breaks per-pixel alpha, so use grayscale AA.
                 graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
                 int catHeight = (int)(ClientSize.Width * .4978);
-                graphics.DrawImage(cat, new Rectangle(0, 0, ClientSize.Width, catHeight));
+                graphics.DrawImage(catCache.Get(new Size(ClientSize.Width, catHeight)), 0, 0);
                 var plate = new Rectangle(18, catHeight + 2, ClientSize.Width - 36, ClientSize.Height - catHeight - 4);
                 using (var shape = LayeredWindow.RoundedPath(plate, 12))
                 using (var background = new SolidBrush(Color.FromArgb(30, 31, 35))) graphics.FillPath(background, shape);
@@ -196,7 +198,7 @@ namespace Neighbor.Windows.UI
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { cat.Dispose(); tips.Dispose(); }
+            if (disposing) { catCache.Dispose(); cat.Dispose(); tips.Dispose(); }
             base.Dispose(disposing);
         }
     }
