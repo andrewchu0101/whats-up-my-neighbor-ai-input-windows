@@ -6,17 +6,24 @@ namespace Neighbor.Core
     public sealed class DesktopPetMotion
     {
         public double X { get; private set; }
+        public double Y { get; private set; }
         public double Distance { get; private set; }
         public bool FacingLeft { get; private set; }
         public bool Walking { get; private set; }
-        public double Y { get; private set; }
         public bool Dragging { get; private set; }
         private double rest = 2, journey;
-        private bool placed;
 
         private const double Sprite = 128; // Window size is Sprite * scale.
         private double grabX, grabY, areaLeft, areaRight;
         private bool moved;
+
+        // Puts the cat at 65% of the walkable span and on the floor of the work area.
+        public void PlaceInitially(double left, double top, double right, double bottom, double scale)
+        {
+            double maxX = Math.Max(left, right - Sprite * scale);
+            X = left + (maxX - left) * .65;
+            Y = bottom - Sprite * scale;
+        }
 
         // Keeps the offset between the cat and the pointer from the moment the drag begins.
         public void BeginDrag(double pointerX, double pointerY)
@@ -28,7 +35,7 @@ namespace Neighbor.Core
         public void DragTo(double pointerX, double pointerY, double left, double top, double right, double bottom, double scale)
         {
             if (!Dragging) return;
-            areaLeft = left; areaRight = right; placed = true; moved = true;
+            areaLeft = left; areaRight = right; moved = true;
             X = pointerX + grabX; Y = pointerY + grabY;
             Fit(left, top, right, bottom, scale);
         }
@@ -58,26 +65,25 @@ namespace Neighbor.Core
 
         private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(Math.Max(min, max), value));
 
-        public void Advance(double seconds, double left, double right, double scale, bool paused)
+        public void Advance(double seconds, double left, double top, double right, double bottom, double scale, bool paused)
         {
-            right = Math.Max(left, right);
             if (Dragging) return;
-            if (!placed) { X = left + (right - left) * .65; placed = true; }
-            X = Math.Max(left, Math.Min(right, X));
+            Fit(left, top, right, bottom, scale);
             if (paused || seconds <= 0 || scale <= 0) return;
             seconds = Math.Min(seconds, .25); // No jump after sleep or a blocked UI thread.
+            double maxX = Math.Max(left, right - Sprite * scale);
             if (!Walking)
             {
                 rest -= seconds;
-                if (rest > 0 || right - left < scale) return;
+                if (rest > 0 || maxX - left < scale) return;
                 Walking = true; journey = 0; Distance = 0;
-                FacingLeft = X > (left + right) / 2;
+                FacingLeft = X > (left + maxX) / 2;
             }
             double step = 55 * scale * seconds;
-            double next = Math.Max(left, Math.Min(right, X + (FacingLeft ? -step : step)));
+            double next = Math.Max(left, Math.Min(maxX, X + (FacingLeft ? -step : step)));
             Distance += Math.Abs(next - X) / scale;
             X = next; journey += seconds;
-            if (X <= left || X >= right || journey >= 7)
+            if (X <= left || X >= maxX || journey >= 7)
             { Walking = false; rest = 3; }
         }
 

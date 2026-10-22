@@ -81,12 +81,12 @@ namespace Neighbor.Windows.UI
             var area = motion.Dragging
                 ? Screen.FromPoint(Cursor.Position).WorkingArea
                 : Screen.FromPoint(new Point(Location.X + size / 2, Location.Y + size / 2)).WorkingArea;
-            if (!placed) { motion.Fit(area.Left, area.Bottom - size, area.Right, area.Bottom, scale); placed = true; }
+            if (!placed) { motion.PlaceInitially(area.Left, area.Top, area.Right, area.Bottom, scale); placed = true; }
             if (motion.Dragging) motion.DragTo(Cursor.Position.X, Cursor.Position.Y, area.Left, area.Top, area.Right, area.Bottom, scale);
             bool animate;
             if (!SystemParametersInfo(0x1042, 0, out animate, 0)) animate = true; // SPI_GETCLIENTAREAANIMATION
-            motion.Advance(elapsed, area.Left, area.Right - size, scale, hidden || !animate);
-            motion.Fit(area.Left, area.Top, area.Right, area.Bottom, scale);
+            // Advance keeps the cat inside the full work area on both axes.
+            motion.Advance(elapsed, area.Left, area.Top, area.Right, area.Bottom, scale, hidden || !animate);
             if (hidden) { Hide(); return; }
             if (ClientSize.Width != size) ClientSize = new Size(size, size);
             Location = new Point((int)Math.Round(motion.X), (int)Math.Round(motion.Y));
