@@ -9,12 +9,59 @@ namespace Neighbor.Core
         public double Distance { get; private set; }
         public bool FacingLeft { get; private set; }
         public bool Walking { get; private set; }
+        public double Y { get; private set; }
+        public bool Dragging { get; private set; }
         private double rest = 2, journey;
         private bool placed;
+
+        private const double Sprite = 128; // Window size is Sprite * scale.
+        private double grabX, grabY, areaLeft, areaRight;
+        private bool moved;
+
+        // Keeps the offset between the cat and the pointer from the moment the drag begins.
+        public void BeginDrag(double pointerX, double pointerY)
+        {
+            grabX = X - pointerX; grabY = Y - pointerY;
+            Dragging = true; Walking = false; moved = false;
+        }
+
+        public void DragTo(double pointerX, double pointerY, double left, double top, double right, double bottom, double scale)
+        {
+            if (!Dragging) return;
+            areaLeft = left; areaRight = right; placed = true; moved = true;
+            X = pointerX + grabX; Y = pointerY + grabY;
+            Fit(left, top, right, bottom, scale);
+        }
+
+        // Releasing keeps the height and starts a horizontal walk from zero distance.
+        // Without a move there is no work area to judge from, so the current facing is kept.
+        public void EndDrag()
+        {
+            if (!Dragging) return;
+            Dragging = false; Walking = true; journey = 0; Distance = 0;
+            if (moved) FacingLeft = X > (areaLeft + areaRight) / 2;
+        }
+
+        public void CancelDrag()
+        {
+            if (!Dragging) return;
+            Dragging = false; rest = 2;
+        }
+
+        // Clamps both axes into the full work area, so a shrunk or removed screen pulls the cat back in.
+        public void Fit(double left, double top, double right, double bottom, double scale)
+        {
+            double size = Sprite * scale;
+            X = Clamp(X, left, right - size);
+            Y = Clamp(Y, top, bottom - size);
+        }
+
+        private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(Math.Max(min, max), value));
 
         public void Advance(double seconds, double left, double right, double scale, bool paused)
         {
             right = Math.Max(left, right);
+            if (Dragging) return;
             if (!placed) { X = left + (right - left) * .65; placed = true; }
             X = Math.Max(left, Math.Min(right, X));
             if (paused || seconds <= 0 || scale <= 0) return;

@@ -1,20 +1,25 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
 using System.Windows.Forms;
 using Neighbor.Core;
 
 namespace Neighbor.Windows.UI
 {
+    // Drawn into a per-pixel alpha layered window (LayeredWindow), so the color-key fringe cannot appear.
+    // Child controls are not drawn into that bitmap, so the eyes are hit-tested and hover-painted here.
     public sealed class RecordingHud : NonActivatingForm
     {
+        private const int WS_EX_LAYERED = 0x00080000;
         private readonly Image cat = Theme.LoadCatImage();
-        private readonly CatActionArea cancel = new CatActionArea(), finish = new CatActionArea();
         private readonly ToolTip tips = new ToolTip();
         private DictationState state;
         private string message = "按快捷鍵開始說話";
         private double level;
         private bool levelKnown, atTop;
+        private RecordingHudTarget hovered;
         public event Action StartRequested;
         public event Action FinishRequested;
         public event Action CancelRequested;
@@ -25,24 +30,21 @@ namespace Neighbor.Windows.UI
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
             FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false; TopMost = true; DoubleBuffered = true;
-            BackColor = TransparencyKey = Color.Magenta;
+            ShowInTaskbar = false; TopMost = true;
             ClientSize = new Size(340, 220);
             StartPosition = FormStartPosition.Manual;
             AccessibleName = "小黑貓語音輸入";
-            cancel.AccessibleName = "取消這次錄音或辨識";
-            finish.AccessibleName = "開始或完成錄音";
-            cancel.Click += (sender, args) => CancelRequested?.Invoke();
-            finish.Click += (sender, args) =>
-            {
-                if (state == DictationState.Recording) FinishRequested?.Invoke();
-                else if (state == DictationState.Idle || state == DictationState.RetainedAudio) StartRequested?.Invoke();
-            };
-            Controls.Add(cancel); Controls.Add(finish);
-            tips.SetToolTip(cancel, "取消"); tips.SetToolTip(finish, "開始錄音");
-            Resize += (sender, args) => LayoutHitAreas();
-            LayoutHitAreas();
             UpdateState(DictationState.Idle, message);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var parameters = base.CreateParams;
+                parameters.ExStyle |= WS_EX_LAYERED;
+                return parameters;
+            }
         }
 
         public void ApplySettings(AppSettings settings)
@@ -58,12 +60,10 @@ namespace Neighbor.Windows.UI
             if (InvokeRequired) { BeginInvoke(new Action(() => UpdateState(value, text))); return; }
             state = value;
             message = String.IsNullOrWhiteSpace(text) ? StateLabel(value) : text;
-            cancel.Enabled = value != DictationState.Idle && value != DictationState.Delivering;
-            finish.Enabled = value == DictationState.Idle || value == DictationState.Recording || value == DictationState.RetainedAudio;
-            tips.SetToolTip(finish, value == DictationState.Recording ? "完成錄音" : value == DictationState.RetainedAudio ? "重試辨識" : "開始錄音");
+            SetHovered(hovered);
             if (value != DictationState.Recording) { level = 0; levelKnown = false; }
             AccessibleDescription = StateLabel(value) + "，" + message;
-            Invalidate();
+            Redraw();
         }
 
         public void UpdateLevel(double decibels, bool isKnown)
@@ -71,46 +71,113 @@ namespace Neighbor.Windows.UI
             if (IsDisposed) return;
             if (InvokeRequired) { BeginInvoke(new Action(() => UpdateLevel(decibels, isKnown))); return; }
             levelKnown = state == DictationState.Recording && isKnown && !Double.IsNaN(decibels) && !Double.IsInfinity(decibels);
-            level = levelKnown ? Math.Max(0, Math.Min(1, (decibels + 60) / 60)) : 0;
-            Invalidate();
+            level = levelKnown ? RecordingHudLayout.LevelFraction(decibels, true) : 0;
+            Redraw();
+        }
+
+        // Renders the current frame as premultiplied ARGB at the window's client size.
+        public Bitmap RenderFrame()
+        {
+            var frame = new Bitmap(ClientSize.Width, ClientSize.Height, PixelFormat.Format32bppPArgb);
+            using (var graphics = Graphics.FromImage(frame))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                // ClearType writes opaque color into the text pixels and breaks per-pixel alpha, so use grayscale AA.
+                graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
+                int catHeight = (int)(ClientSize.Width * .4978);
+                graphics.DrawImage(cat, new Rectangle(0, 0, ClientSize.Width, catHeight));
+                var plate = new Rectangle(18, catHeight + 2, ClientSize.Width - 36, ClientSize.Height - catHeight - 4);
+                using (var shape = LayeredWindow.RoundedPath(plate, 12))
+                using (var background = new SolidBrush(Color.FromArgb(30, 31, 35))) graphics.FillPath(background, shape);
+                var bounds = new RectangleF(plate.Left + 12, plate.Top + 7, plate.Width - 24, plate.Height - 11);
+                using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter })
+                using (var brush = new SolidBrush(Color.FromArgb(241, 242, 245))) graphics.DrawString(message, Font, brush, bounds, format);
+                if (state == DictationState.Recording)
+                {
+                    int meterWidth = (int)(ClientSize.Width * .30);
+                    var meter = new Rectangle((ClientSize.Width - meterWidth) / 2, (int)(catHeight * .82), meterWidth, Math.Max(4, (int)(ClientSize.Width / 68.0)));
+                    using (var brush = new SolidBrush(Color.FromArgb(61, 62, 68))) graphics.FillRectangle(brush, meter);
+                    if (levelKnown && level > 0)
+                    {
+                        var filled = new Rectangle(meter.Left, meter.Top, Math.Max(1, (int)(meterWidth * level)), meter.Height);
+                        using (var brush = new SolidBrush(Color.FromArgb(165, 193, 255))) graphics.FillRectangle(brush, filled);
+                    }
+                }
+                PaintHover(graphics, RecordingHudTarget.Cancel, RecordingHudLayout.CancelEye(ClientSize));
+                PaintHover(graphics, RecordingHudTarget.Finish, RecordingHudLayout.FinishEye(ClientSize));
+            }
+            return frame;
         }
 
         protected override void OnShown(EventArgs args) { base.OnShown(args); PlaceOnScreen(); }
+        protected override void OnHandleCreated(EventArgs args) { base.OnHandleCreated(args); Redraw(); }
+        protected override void OnMouseMove(MouseEventArgs args)
+        {
+            base.OnMouseMove(args);
+            var target = Clickable(RecordingHudLayout.HitTest(args.Location, ClientSize));
+            if (target != hovered) SetHovered(target);
+        }
+        protected override void OnMouseLeave(EventArgs args) { base.OnMouseLeave(args); SetHovered(RecordingHudTarget.None); }
+        protected override void OnMouseUp(MouseEventArgs args)
+        {
+            base.OnMouseUp(args);
+            if (args.Button != MouseButtons.Left) return;
+            var target = Clickable(RecordingHudLayout.HitTest(args.Location, ClientSize));
+            if (target == RecordingHudTarget.Cancel) CancelRequested?.Invoke();
+            else if (target == RecordingHudTarget.Finish)
+            {
+                if (state == DictationState.Recording) FinishRequested?.Invoke();
+                else StartRequested?.Invoke();
+            }
+        }
+
         private void PlaceOnScreen()
         {
             var area = Screen.FromPoint(Cursor.Position).WorkingArea;
             Location = new Point(area.Left + (area.Width - Width) / 2, atTop ? area.Top + 12 : area.Bottom - Height - 12);
+            Redraw();
         }
-        private void LayoutHitAreas()
+
+        private void Redraw()
         {
-            int catHeight = (int)(ClientSize.Width * .4978);
-            cancel.Bounds = new Rectangle((int)(ClientSize.Width * .14), (int)(catHeight * .53), (int)(ClientSize.Width * .18), (int)(catHeight * .29));
-            finish.Bounds = new Rectangle((int)(ClientSize.Width * .67), (int)(catHeight * .53), (int)(ClientSize.Width * .19), (int)(catHeight * .29));
+            if (IsDisposed || !IsHandleCreated) return;
+            using (var frame = RenderFrame()) LayeredWindow.Present(Handle, Location, frame);
         }
-        protected override void OnPaint(PaintEventArgs args)
+
+        private RecordingHudTarget Clickable(RecordingHudTarget target)
         {
-            base.OnPaint(args);
-            var graphics = args.Graphics;
-            graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            int catHeight = (int)(ClientSize.Width * .4978);
-            graphics.DrawImage(cat, new Rectangle(0, 0, ClientSize.Width, catHeight));
-            var plate = new Rectangle(18, catHeight + 2, ClientSize.Width - 36, ClientSize.Height - catHeight - 4);
-            using (var shape = Rounded(plate, 12))
-            using (var background = new SolidBrush(Color.FromArgb(30, 31, 35))) graphics.FillPath(background, shape);
-            var bounds = new Rectangle(plate.Left + 12, plate.Top + 7, plate.Width - 24, plate.Height - 11);
-            TextRenderer.DrawText(graphics, message, Font, bounds, Color.FromArgb(241, 242, 245), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
-            if (state == DictationState.Recording)
+            switch (target)
             {
-                int meterWidth = (int)(ClientSize.Width * .30);
-                var meter = new Rectangle((ClientSize.Width - meterWidth) / 2, (int)(catHeight * .82), meterWidth, Math.Max(4, (int)(ClientSize.Width / 68.0)));
-                using (var brush = new SolidBrush(Color.FromArgb(61, 62, 68))) graphics.FillRectangle(brush, meter);
-                if (levelKnown && level > 0)
-                {
-                    var filled = new Rectangle(meter.Left, meter.Top, Math.Max(1, (int)(meterWidth * level)), meter.Height);
-                    using (var brush = new SolidBrush(Color.FromArgb(165, 193, 255))) graphics.FillRectangle(brush, filled);
-                }
+                case RecordingHudTarget.Cancel: return state != DictationState.Idle && state != DictationState.Delivering ? target : RecordingHudTarget.None;
+                case RecordingHudTarget.Finish: return state == DictationState.Idle || state == DictationState.Recording || state == DictationState.RetainedAudio ? target : RecordingHudTarget.None;
+                default: return RecordingHudTarget.None;
             }
+        }
+
+        private void SetHovered(RecordingHudTarget target)
+        {
+            hovered = Clickable(target);
+            Cursor = hovered == RecordingHudTarget.None ? Cursors.Default : Cursors.Hand;
+            tips.SetToolTip(this, TipFor(hovered));
+            Redraw();
+        }
+
+        private string TipFor(RecordingHudTarget target)
+        {
+            switch (target)
+            {
+                case RecordingHudTarget.Cancel: return "取消";
+                case RecordingHudTarget.Finish: return state == DictationState.Recording ? "完成錄音" : state == DictationState.RetainedAudio ? "重試辨識" : "開始錄音";
+                default: return "";
+            }
+        }
+
+        private void PaintHover(Graphics graphics, RecordingHudTarget target, Rectangle eye)
+        {
+            if (hovered != target) return;
+            using (var pen = new Pen(Color.FromArgb(160, 190, 255), 2)) graphics.DrawEllipse(pen, eye.X + 2, eye.Y + 2, eye.Width - 5, eye.Height - 5);
         }
 
         private static string StateLabel(DictationState value)
@@ -126,15 +193,7 @@ namespace Neighbor.Windows.UI
                 default: return "按快捷鍵開始說話";
             }
         }
-        internal static GraphicsPath Rounded(Rectangle rectangle, int radius)
-        {
-            var path = new GraphicsPath(); int diameter = radius * 2;
-            path.AddArc(rectangle.Left, rectangle.Top, diameter, diameter, 180, 90);
-            path.AddArc(rectangle.Right - diameter, rectangle.Top, diameter, diameter, 270, 90);
-            path.AddArc(rectangle.Right - diameter, rectangle.Bottom - diameter, diameter, diameter, 0, 90);
-            path.AddArc(rectangle.Left, rectangle.Bottom - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure(); return path;
-        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing) { cat.Dispose(); tips.Dispose(); }
@@ -142,23 +201,47 @@ namespace Neighbor.Windows.UI
         }
     }
 
-    internal sealed class CatActionArea : Control
+    public enum RecordingHudTarget { None, Cancel, Finish }
+
+    // Geometry shared by painting and hit testing. Eyes are ellipses inscribed in these rectangles.
+    public static class RecordingHudLayout
     {
-        private bool hover;
-        public CatActionArea()
+        public static Rectangle CancelEye(Size clientSize)
         {
-            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            BackColor = Color.Transparent; Cursor = Cursors.Hand; TabStop = false;
-            AccessibleRole = AccessibleRole.PushButton;
+            int catHeight = CatHeight(clientSize);
+            return new Rectangle((int)(clientSize.Width * .14), (int)(catHeight * .53), (int)(clientSize.Width * .18), (int)(catHeight * .29));
         }
-        protected override void OnMouseEnter(EventArgs args) { hover = true; Invalidate(); base.OnMouseEnter(args); }
-        protected override void OnMouseLeave(EventArgs args) { hover = false; Invalidate(); base.OnMouseLeave(args); }
-        protected override void OnPaint(PaintEventArgs args)
+
+        public static Rectangle FinishEye(Size clientSize)
         {
-            base.OnPaint(args);
-            if (!hover || !Enabled) return;
-            args.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var pen = new Pen(Color.FromArgb(160, 190, 255), 2)) args.Graphics.DrawEllipse(pen, 2, 2, Width - 5, Height - 5);
+            int catHeight = CatHeight(clientSize);
+            return new Rectangle((int)(clientSize.Width * .67), (int)(catHeight * .53), (int)(clientSize.Width * .19), (int)(catHeight * .29));
+        }
+
+        public static RecordingHudTarget HitTest(Point point, Size clientSize)
+        {
+            if (InsideEllipse(CancelEye(clientSize), point)) return RecordingHudTarget.Cancel;
+            if (InsideEllipse(FinishEye(clientSize), point)) return RecordingHudTarget.Finish;
+            return RecordingHudTarget.None;
+        }
+
+        // Maps decibels to a 0..1 meter fill; unknown or non-finite input yields 0.
+        public static double LevelFraction(double decibels, bool isKnown)
+        {
+            if (!isKnown || Double.IsNaN(decibels) || Double.IsInfinity(decibels)) return 0;
+            return Math.Max(0, Math.Min(1, (decibels + 60) / 60));
+        }
+
+        private static int CatHeight(Size clientSize)
+        {
+            return (int)(clientSize.Width * .4978);
+        }
+
+        private static bool InsideEllipse(Rectangle box, Point point)
+        {
+            double dx = (point.X - (box.Left + box.Width / 2.0)) / (box.Width / 2.0);
+            double dy = (point.Y - (box.Top + box.Height / 2.0)) / (box.Height / 2.0);
+            return dx * dx + dy * dy <= 1;
         }
     }
 }

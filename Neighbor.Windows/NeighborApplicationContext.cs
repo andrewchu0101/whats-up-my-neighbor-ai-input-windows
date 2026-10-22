@@ -45,6 +45,8 @@ namespace Neighbor.Windows
         private string shownPendingId;
         private bool exiting, learningBusy;
         private int smokeTicks;
+        /// <summary>Smoke mode only: true when an optional component failed, so the process exits non-zero.</summary>
+        public bool Failed { get; private set; }
 
         public NeighborApplicationContext(bool smoke = false)
         {
@@ -66,7 +68,7 @@ namespace Neighbor.Windows
             learning = new LearningEngine(new WindowsWordSegmenter());
             hud = new RecordingHud(); hud.ApplySettings(settings);
             toast = new LearningToast();
-            if (!smoke) CreateDesktopPet();
+            CreateDesktopPet();
             tray = new NotifyIcon { Icon = Theme.LoadIcon(), Text = ProductName, ContextMenuStrip = menu, Visible = true };
             BuildMenu();
             hotkeys.Pressed += id => Run(() => ToggleAsync(id == 2));
@@ -100,9 +102,19 @@ namespace Neighbor.Windows
             try
             {
                 desktopPet = new DesktopPetForm();
-                desktopPet.Failed += (_, __) => Post(() => Notify("桌面小黑貓已暫停，聽寫功能不受影響。可在系統匣重新開啟。"));
+                desktopPet.Failed += error => {
+                    if (smoke) Failed = true;
+                    DiagnosticLog.Record(DiagnosticLog.DefaultPath, "desktop-pet-run", error);
+                    Post(() => Notify("桌面小黑貓已暫停，聽寫功能不受影響。詳細原因見 diagnostics.log。"));
+                };
             }
-            catch { desktopPet = null; Post(() => Notify("無法建立桌面小黑貓，聽寫功能不受影響。")); }
+            catch (Exception error)
+            {
+                if (smoke) Failed = true;
+                DiagnosticLog.Record(DiagnosticLog.DefaultPath, "desktop-pet-create", error);
+                desktopPet = null;
+                Post(() => Notify("無法建立桌面小黑貓，聽寫功能不受影響。詳細原因見 diagnostics.log。"));
+            }
         }
         private void BuildMenu()
         {
@@ -173,7 +185,8 @@ namespace Neighbor.Windows
             if (exiting) return;
             if (smoke)
             {
-                if (++smokeTicks == 1) { hud.UpdateState(DictationState.Recording, "測試錄音介面"); hud.Show(); hud.UpdateLevel(-20, true); }
+                if (++smokeTicks == 1) { hud.UpdateState(DictationState.Recording, "測試錄音介面"); hud.Show(); hud.UpdateLevel(-20, true); desktopPet?.Configure(true, false); }
+                if (smokeTicks == 8) desktopPet?.Configure(false, false);
                 if (smokeTicks >= 10) await ExitAsync();
                 return;
             }
