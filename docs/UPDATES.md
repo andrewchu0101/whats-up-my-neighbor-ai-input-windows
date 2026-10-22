@@ -5,7 +5,7 @@
 ## 使用者看到的行為
 
 - App 不會自動檢查更新，也不會背景下載或安裝。
-- 要升級時，到 [Releases](https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/releases) 下載新版的 `Neighbor-Setup-<版本>-x64.exe` 並執行。
+- 要升級時，到 [Releases](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/releases) 下載新版的 `Neighbor-Setup-<版本>-x64.exe` 並執行。
 - 安裝程式會保留設定（`%LOCALAPPDATA%\WhatsUpMyNeighbor`）、詞典與 Windows 認證管理員中的 API Key。
 - 安裝程式會關閉正在執行的 App（`CloseApplications=yes`），升級後不會自動重新啟動。
 

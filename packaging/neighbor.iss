@@ -10,11 +10,11 @@
 AppId={{B747FDE2-3340-45DA-A662-90FF930904EA}
 AppName=What's up my neighbor
 AppVersion={#AppVersion}
-; Original author credit is kept in AppPublisher and LICENSE; the URLs point to the Windows fork that publishes this installer.
+; Original author credit is kept in AppPublisher and LICENSE; the URLs point to the upstream Windows repository.
 AppPublisher=YUI
-AppPublisherURL=https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows
-AppSupportURL=https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/issues
-AppUpdatesURL=https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/releases
+AppPublisherURL=https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows
+AppSupportURL=https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/issues
+AppUpdatesURL=https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/releases
 DefaultDirName={localappdata}\Programs\WhatsUpMyNeighbor
 DefaultGroupName=What's up my neighbor
 DisableProgramGroupPage=yes

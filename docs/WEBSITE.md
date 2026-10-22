@@ -31,8 +31,8 @@
 
 | 項目 | 網址 | 狀態 |
 |---|---|---|
-| Release 頁面 | `https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/releases` | 預計網址（尚未建立 Release） |
-| 直接下載（預計） | `https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/releases/download/v0.1.0-beta.2/Neighbor-Setup-0.1.0-beta.2-x64.exe` | 預計網址，**尚不可下載** |
+| Release 頁面 | `https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/releases` | 預計網址（上游 repo，尚未建立 Release） |
+| 直接下載（預計） | `https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/releases/download/v0.1.0-beta.2/Neighbor-Setup-0.1.0-beta.2-x64.exe` | 預計網址，**尚不可下載** |
 | 校驗檔（預計） | `.../releases/download/v0.1.0-beta.2/Neighbor-Setup-0.1.0-beta.2-x64.exe.sha256` | 預計網址，**尚不可下載** |
 
 發布後請用瀏覽器實際確認直接下載網址可以下載，再更新官網。
@@ -60,7 +60,7 @@
 - 錄音改為使用麥克風的混音格式擷取，再轉為 16 kHz 單聲道，解決部分麥克風不接受 16 kHz 串流的問題。
 - 版本號統一由 `VERSION` 決定，安裝檔、應用程式版本與發布標籤一致。
 - 發布流程改為全部測試通過後才發布，並附上校驗檔與測試紀錄。
-- 安裝程式的網址指向本 fork，原作者署名與 MIT 授權保留。
+- 安裝程式的網址指向原作者的 Windows repo，原作者署名與 MIT 授權保留。
 
 完整內容見 [CHANGELOG.md](../CHANGELOG.md) 與 [RELEASE_NOTES.md](../RELEASE_NOTES.md)。
 

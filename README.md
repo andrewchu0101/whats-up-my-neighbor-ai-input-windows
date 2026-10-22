@@ -1,5 +1,7 @@
 # What's up my neighbor AI Input — Windows
 
+官方網站：[nekonode.cloud](https://nekonode.cloud)。各平台進度、使用教學與開發者文件可在官網查看。
+
 小黑貓語音輸入工具（Windows 版）：按快捷鍵說話，再按一次完成，錄音送到 Groq 辨識，然後把文字貼到目前的輸入框。**只貼上，不會自動按 Enter 送出訊息。**
 
 目前版本：**0.1.0-beta.2（預發布測試版）**。實機驗收尚未完成，見 [VALIDATION.md](VALIDATION.md)。
@@ -21,7 +23,7 @@
 
 ## 下載與安裝
 
-到 [Releases](https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/releases) 下載最新版本，只需要一個檔案：
+到 [Releases](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/releases) 下載最新版本，只需要一個檔案：
 
 ```text
 Neighbor-Setup-<版本>-x64.exe

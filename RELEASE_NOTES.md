@@ -42,7 +42,7 @@ Get-FileHash .\Neighbor-Setup-{{VERSION}}-x64.exe -Algorithm SHA256
 - 麥克風改用裝置自己的混音格式錄音，錄完再轉為 16 kHz 單聲道。先前直接要求 16 kHz 串流，部分麥克風會拒絕，導致錄音無法開始。
 - 版本號統一由 `VERSION` 檔案決定，安裝檔名稱、應用程式版本與發布標籤一致。
 - 發布流程改為：全部測試與安裝測試通過後，才建立預發布版本並附上校驗檔與測試紀錄。
-- 安裝程式的發行者、支援與更新網址指向本 fork；原作者署名與 MIT 授權保留。
+- 安裝程式的發行者、支援與更新網址指向原作者的 Windows repo；原作者署名與 MIT 授權保留。
 
 ## 升級
 
@@ -52,7 +52,7 @@ Get-FileHash .\Neighbor-Setup-{{VERSION}}-x64.exe -Algorithm SHA256
 
 ## 解除安裝
 
-到 Windows **設定 → 應用程式** 移除 What's up my neighbor。設定、詞典與金鑰預設保留；完整清除步驟見 [使用說明.txt](https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/blob/main/%E4%BD%BF%E7%94%A8%E8%AA%AA%E6%98%8E.txt)。
+到 Windows **設定 → 應用程式** 移除 What's up my neighbor。設定、詞典與金鑰預設保留；完整清除步驟見 [使用說明.txt](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/blob/main/%E4%BD%BF%E7%94%A8%E8%AA%AA%E6%98%8E.txt)。
 
 ## 本版附件
 
@@ -85,4 +85,4 @@ Get-FileHash .\Neighbor-Setup-{{VERSION}}-x64.exe -Algorithm SHA256
 - 使用真實 Groq 金鑰的辨識品質與延遲。
 - ARM64 未驗證；iPhone 接力、跨裝置詞典同步、多人會議與本機 AI 模型不在本版範圍。
 
-詳見 [VALIDATION.md](https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/blob/main/VALIDATION.md)。遇到問題請到 [Issues](https://github.com/andrewchu0101/whats-up-my-neighbor-ai-input-windows/issues) 回報，不要附上 API Key 或私人錄音。
+詳見 [VALIDATION.md](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/blob/main/VALIDATION.md)。遇到問題請到 [Issues](https://github.com/yuipan0611/whats-up-my-neighbor-ai-input-windows/issues) 回報，不要附上 API Key 或私人錄音。

@@ -19,7 +19,7 @@
 | 錄音浮窗 | 改用逐像素 Alpha 的分層視窗，移除色鍵透明造成的紫色外框；貓圖快取降低每幀成本 |
 | 桌寵（第一階段） | 預設關閉；沿用原 SVG 素材的散步與休息；可拖曳，放開後水平散步；控制器集中管理建立、狀態與失敗處理 |
 | 無障礙 | 錄音浮窗的左右眼以 MSAA PushButton 暴露，名稱隨狀態變化，預設操作與滑鼠共用同一判斷 |
-| 啟動穩定性 | 修正分層視窗 DIB 寫入錯誤造成的啟動崩潰；分層視窗失敗改為明確拋出 |
+| 啟動穩定性 | 修正**本分支開發期間引入**的分層視窗啟動崩潰（DIB 寫入錯誤）；分層視窗失敗改為明確拋出。此問題不存在於上游 `main` |
 | 測試基礎 | 離線測試 563 項；新增 smoke 閘門（會實際啟動程式）與閘門自測試 |
 
 ## 3. 各項改善
@@ -41,7 +41,7 @@
 
 - **問題**：色鍵透明沒有 Alpha，抗鋸齒邊緣與洋紅混色，形成紫色外框。桌寵與錄音浮窗都受影響。
 - **方案**：`LayeredWindow` 以 `UpdateLayeredWindow` 與預乘 32bpp ARGB 位圖送出畫面。拖曳由 `DesktopPetMotion` 模型處理（保持抓取位置、拖曳中暫停、放開後水平散步、螢幕改變時夾回可見範圍）。
-- **啟動崩潰修正**：`Present` 曾把 DIB 控制代碼當成像素指標寫入，每次顯示 HUD 或桌寵時都會存取違規。已改為寫入像素指標，並新增回歸測試（修正前紅燈、修正後綠燈）。
+- **啟動崩潰修正（開發期間引入，已修復）**：`Present` 曾把 DIB 控制代碼當成像素指標寫入，每次顯示 HUD 或桌寵時都會存取違規。這是本分支分層視窗改動期間產生的錯誤，上游 `main` 沒有此問題。已改為寫入像素指標，並新增回歸測試（修正前紅燈、修正後綠燈）。
 - **主要檔案**：`Neighbor.Windows/UI/LayeredWindow.cs`、`DesktopPetForm.cs`、`RecordingHud.cs`、`Neighbor.Core/DesktopPetMotion.cs`、`assets/desktop-pet/`。
 - **素材與授權**：SVG 素材複製自原 macOS 專案的 `Resources/DesktopPet/`，來源與授權見 `assets/desktop-pet/README.md`。
 
@@ -169,20 +169,22 @@
 - 桌寵的散步速度與 macOS 版不同（固定 55 px/s、最多 7 秒，macOS 版約 2–9 秒走完、使用平滑曲線）。
 - 桌寵沒有點擊、舔掌、抓起動畫與資料夾停靠。
 - 錄音浮窗的眼睛沒有停用的視覺樣式，停用狀態只存在於無障礙的 `State`。
+- **左右眼無障礙回歸（開發期間引入，已修復）**：分層視窗改動把原本的子控制項（`CatActionArea`，具有 PushButton 角色與名稱）移除，導致輔助工具看不到左右眼。已以 `WM_GETOBJECT` 重新提供 MSAA 子元素，此回歸存在於本分支的中間版本，不是上游的問題。
 - `LocationChange` 通知已送出，但 Narrator 與 UIA 客戶端是否正確更新，尚未驗證。
-- `release.yml` 會在推送 `v*` 標籤時建立 Release。若合併到原作者 repo，需要先決定是否保留（見下節）。
+- `release.yml` 在本分支已改為僅手動觸發（`workflow_dispatch`）。fork 的 `main` 仍保留推送標籤觸發的既有流程。
 
 ## 8. 上游差異與合併注意事項
 
 - **上游基準**：`yuipan0611/whats-up-my-neighbor-ai-input-windows` 的 `main` 為 `9e767ea`，與本 fork 的基準相同（已確認）。
-- **差異範圍**：53 個檔案，約 3,934 行新增、142 行刪除，全部來自本 fork 的 commit。
-- **Fork 專用的設定（合併前需檢查）**：
-  - `packaging/neighbor.iss` 的 `AppPublisherURL`、`AppSupportURL`、`AppUpdatesURL` 指向 `andrewchu0101/...`。
-  - `README.md`、`RELEASE_NOTES.md`、`docs/UPDATES.md`、`docs/WEBSITE.md`、`docs/DEVELOPMENT.md`、`CONTRIBUTING.md`、`使用說明.txt` 中的下載與支援網址指向 fork。
-  - `docs/WEBSITE.md` 的直接下載網址標示為**預計網址**，尚未發布，不應被當作可用的下載連結。
-- **發布設定**：`.github/workflows/release.yml` 沒有寫死 fork 的身分，但推送 `v*` 標籤或手動執行時會建立預發布 Release。合併到原作者 repo 前，建議原作者決定是否保留，或改為僅手動觸發。
-- **可能衝突**：上游有一個開放的 PR #2（`codex/official-website-links`，作者 yuipan0611），修改的是 `README.md`，新增官網連結。本 fork 也重寫了 `README.md`，合併時需要手動整合，保留 PR #2 的官網連結。
-- **建議處理**：先由原作者審查程式與測試，再另外處理 fork 專用網址與發布設定；不要直接把網址與發布者資訊套進原作者 repo。
+- **差異範圍**：本分支相對上游的改動來自本 fork 的 commit，數量與檔案清單以 PR 頁面為準。
+- **交付分支已處理的設定**（只在 `handoff/windows-beta2-improvements` 上，fork 的 `main` 不變）：
+  - 安裝程式的發行者、支援與更新網址（`packaging/neighbor.iss`）指向上游 repo。
+  - 下載、支援與更新連結（README、CONTRIBUTING、RELEASE_NOTES、docs/UPDATES、docs/DEVELOPMENT、docs/WEBSITE、使用說明.txt）指向上游 repo。
+  - 來源與維護說明（README 第 9 行、RELEASE_NOTES 第 5 行、docs/WEBSITE 維護者列）保留 fork 連結，並標明它是貢獻來源。
+  - `docs/WEBSITE.md` 的直接下載網址仍標示為**預計網址**，上游尚未建立此 Release，不能當作可用連結。
+- **發布設定**：`release.yml` 在本分支只保留 `workflow_dispatch`，由原作者決定何時發布。
+- **上游 PR #2**（`codex/official-website-links`，作者 yuipan0611，修改 `README.md`）：本分支把 PR #2 新增的官網連結原文保留在 README 標題下方。其餘 README 內容是本分支的 Windows 版說明。若 PR #2 先合併，合併時應以本分支的 README 為準，但保留官網連結那一行。
+- **建議處理**：先由原作者審查程式與測試，再決定 fork 的連結與發布設定是否要保留。
 
 ## 9. 交付文件與驗證工具的位置
 

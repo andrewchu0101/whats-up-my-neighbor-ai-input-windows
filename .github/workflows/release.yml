@@ -1,7 +1,6 @@
 name: Release
 on:
-  push:
-    tags: ['v*']
+  # Manual trigger only: the maintainer decides when a release is published.
   workflow_dispatch:
 permissions:
   contents: read
