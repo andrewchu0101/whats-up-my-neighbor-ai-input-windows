@@ -76,9 +76,10 @@ namespace Neighbor.Windows
             tray = new NotifyIcon { Icon = Theme.LoadIcon(), Text = ProductName, ContextMenuStrip = menu, Visible = true };
             BuildMenu();
             hotkeys.Pressed += id => Run(() => ToggleAsync(id == 2));
-            hud.StartRequested += () => Run(() => coordinator.State == DictationState.RetainedAudio ? coordinator.RetryAsync() : ToggleAsync(false));
+            hud.StartRequested += () => Run(() => ToggleAsync(false));
             hud.FinishRequested += () => Run(coordinator.StopAsync);
             hud.CancelRequested += () => Run(CancelAsync);
+            hud.RetryRequested += () => Run(coordinator.RetryAsync);
             toast.Rejected += RejectLearning;
             coordinator.StatusChanged += (_, e) => UpdateStatus(e);
             coordinator.LevelChanged += (_, e) => hud.UpdateLevel(e.Decibels, e.IsKnown);

@@ -24,6 +24,21 @@ namespace Neighbor.Windows.UI
         public event Action StartRequested;
         public event Action FinishRequested;
         public event Action CancelRequested;
+        public event Action RetryRequested;
+
+        // Single entry point for a mouse click and for an accessibility default action.
+        // The state is read at call time, so a stale target cannot run an action for a newer state.
+        public bool Activate(RecordingHudTarget target)
+        {
+            switch (RecordingHudLayout.ActionFor(target, state))
+            {
+                case RecordingHudAction.Cancel: CancelRequested?.Invoke(); return true;
+                case RecordingHudAction.Finish: FinishRequested?.Invoke(); return true;
+                case RecordingHudAction.Start: StartRequested?.Invoke(); return true;
+                case RecordingHudAction.Retry: RetryRequested?.Invoke(); return true;
+                default: return false;
+            }
+        }
 
         public RecordingHud()
         {
@@ -60,8 +75,10 @@ namespace Neighbor.Windows.UI
         {
             if (IsDisposed) return;
             if (InvokeRequired) { BeginInvoke(new Action(() => UpdateState(value, text))); return; }
+            var previous = state;
             state = value;
             message = String.IsNullOrWhiteSpace(text) ? StateLabel(value) : text;
+            if (previous != value) NotifyEyesChanged(AccessibleEvents.NameChange);
             SetHovered(hovered);
             if (value != DictationState.Recording) { level = 0; levelKnown = false; }
             AccessibleDescription = StateLabel(value) + "，" + message;
@@ -113,7 +130,89 @@ namespace Neighbor.Windows.UI
             return frame;
         }
 
+        // Overriding CreateAccessibilityInstance does not reach the MSAA client path in this framework
+        // (verified: IAccessible reports zero children). The client-object request is answered directly
+        // with the container, so MSAA clients see the two eyes.
+        private const int WM_GETOBJECT = 0x003D;
+        private const int OBJID_CLIENT = -4;
+        private RecordingHudContainerAccessibleObject accessibleRoot;
+
+        // The accessible container for the two eyes. MSAA clients reach it through WM_GETOBJECT below.
+        public RecordingHudContainerAccessibleObject AccessibleRoot
+        {
+            get { return accessibleRoot ?? (accessibleRoot = new RecordingHudContainerAccessibleObject(this)); }
+        }
+
+        protected override void WndProc(ref Message message)
+        {
+            if (message.Msg == WM_GETOBJECT && unchecked((int)message.LParam.ToInt64()) == OBJID_CLIENT)
+            {
+                Guid accessibleIid = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71"); // IAccessible
+                message.Result = LresultFromObject(ref accessibleIid, message.WParam, AccessibleRoot);
+                return;
+            }
+            base.WndProc(ref message);
+        }
+
+        [System.Runtime.InteropServices.DllImport("oleacc.dll")]
+        private static extern IntPtr LresultFromObject(ref Guid riid, IntPtr wParam, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.IUnknown)] object punk);
+
+        internal DictationState CurrentState { get { return state; } }
+
+        internal RecordingHudAction ActionFor(RecordingHudTarget target)
+        {
+            return RecordingHudLayout.ActionFor(target, state);
+        }
+
+        // Accessible name for the right eye follows the current state; the left eye never changes.
+        internal string EyeName(RecordingHudTarget target)
+        {
+            if (target == RecordingHudTarget.Cancel) return "取消這次錄音或辨識";
+            switch (state)
+            {
+                case DictationState.Idle: return "開始錄音";
+                case DictationState.Recording: return "完成錄音";
+                case DictationState.RetainedAudio: return "重試辨識";
+                default: return "開始或完成錄音";
+            }
+        }
+
+        // Default action for an eye. Runs on the UI thread and reads the state at that moment, so a
+        // stale or hidden or released HUD does nothing.
+        public void DoAccessibleAction(RecordingHudTarget target)
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                try { Invoke(new Action(() => DoAccessibleAction(target))); }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
+                return;
+            }
+            // Visibility and state are checked here, on the UI thread, at the moment of execution.
+            if (IsDisposed || !Visible) return;
+            Activate(target);
+        }
+
+        // Tells assistive technology that the eyes changed. Called on the UI thread only.
+        // Child ids are the MSAA child ids (1 = left eye, 2 = right eye). AccessibilityNotifyClients takes an
+        // internal object id that the framework remaps, which sent the events to the wrong child; this sends them directly.
+        private void NotifyEyesChanged(AccessibleEvents accEvent)
+        {
+            if (!IsHandleCreated || IsDisposed) return;
+            const int ObjidClient = -4;
+            NotifyWinEvent((uint)accEvent, Handle, ObjidClient, 1);
+            NotifyWinEvent((uint)accEvent, Handle, ObjidClient, 2);
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern void NotifyWinEvent(uint winEvent, IntPtr hwnd, int idObject, int idChild);
+
         protected override void OnShown(EventArgs args) { base.OnShown(args); PlaceOnScreen(); }
+        // Eye bounds are computed from the window position and size, so a move, resize or DPI change
+        // must tell assistive technology to read them again.
+        protected override void OnLocationChanged(EventArgs args) { base.OnLocationChanged(args); NotifyEyesChanged(AccessibleEvents.LocationChange); }
+        protected override void OnSizeChanged(EventArgs args) { base.OnSizeChanged(args); NotifyEyesChanged(AccessibleEvents.LocationChange); }
         protected override void OnHandleCreated(EventArgs args) { base.OnHandleCreated(args); Redraw(); }
         protected override void OnMouseMove(MouseEventArgs args)
         {
@@ -126,13 +225,7 @@ namespace Neighbor.Windows.UI
         {
             base.OnMouseUp(args);
             if (args.Button != MouseButtons.Left) return;
-            var target = Clickable(RecordingHudLayout.HitTest(args.Location, ClientSize));
-            if (target == RecordingHudTarget.Cancel) CancelRequested?.Invoke();
-            else if (target == RecordingHudTarget.Finish)
-            {
-                if (state == DictationState.Recording) FinishRequested?.Invoke();
-                else StartRequested?.Invoke();
-            }
+            Activate(RecordingHudLayout.HitTest(args.Location, ClientSize));
         }
 
         private void PlaceOnScreen()
@@ -150,12 +243,7 @@ namespace Neighbor.Windows.UI
 
         private RecordingHudTarget Clickable(RecordingHudTarget target)
         {
-            switch (target)
-            {
-                case RecordingHudTarget.Cancel: return state != DictationState.Idle && state != DictationState.Delivering ? target : RecordingHudTarget.None;
-                case RecordingHudTarget.Finish: return state == DictationState.Idle || state == DictationState.Recording || state == DictationState.RetainedAudio ? target : RecordingHudTarget.None;
-                default: return RecordingHudTarget.None;
-            }
+            return RecordingHudLayout.ActionFor(target, state) == RecordingHudAction.None ? RecordingHudTarget.None : target;
         }
 
         private void SetHovered(RecordingHudTarget target)
@@ -205,6 +293,63 @@ namespace Neighbor.Windows.UI
 
     public enum RecordingHudTarget { None, Cancel, Finish }
 
+    // Container for the two eyes. Name and description keep describing the whole HUD.
+    public sealed class RecordingHudContainerAccessibleObject : AccessibleObject
+    {
+        private readonly RecordingHud hud;
+        private readonly RecordingHudEyeAccessibleObject cancel, finish;
+        public RecordingHudContainerAccessibleObject(RecordingHud hud)
+        {
+            this.hud = hud;
+            cancel = new RecordingHudEyeAccessibleObject(hud, RecordingHudTarget.Cancel, this);
+            finish = new RecordingHudEyeAccessibleObject(hud, RecordingHudTarget.Finish, this);
+        }
+        public override string Name { get { return hud.AccessibleName; } }
+        public override string Description { get { return hud.AccessibleDescription; } }
+        public override AccessibleRole Role { get { return AccessibleRole.Window; } }
+        public override Rectangle Bounds { get { return hud.IsDisposed ? Rectangle.Empty : hud.RectangleToScreen(new Rectangle(Point.Empty, hud.ClientSize)); } }
+        public override int GetChildCount() { return 2; }
+        public override AccessibleObject GetChild(int index)
+        {
+            if (index == 0) return cancel;
+            if (index == 1) return finish;
+            return null;
+        }
+    }
+
+    // One eye as a push button. Name, enabled state and default action all come from the same rule as the mouse.
+    public sealed class RecordingHudEyeAccessibleObject : AccessibleObject
+    {
+        private readonly RecordingHud hud;
+        private readonly RecordingHudTarget target;
+        private readonly AccessibleObject parent;
+        public RecordingHudEyeAccessibleObject(RecordingHud hud, RecordingHudTarget target, AccessibleObject parent)
+        {
+            this.hud = hud; this.target = target; this.parent = parent;
+        }
+        public override AccessibleObject Parent { get { return parent; } }
+        public override string Name { get { return hud.EyeName(target); } }
+        public override AccessibleRole Role { get { return AccessibleRole.PushButton; } }
+        public override AccessibleStates State
+        {
+            get { return hud.ActionFor(target) == RecordingHudAction.None ? AccessibleStates.Unavailable : AccessibleStates.None; }
+        }
+        // Screen coordinates, recomputed on every request so moves and DPI changes are reflected.
+        public override Rectangle Bounds
+        {
+            get
+            {
+                if (hud.IsDisposed) return Rectangle.Empty;
+                var eye = target == RecordingHudTarget.Cancel ? RecordingHudLayout.CancelEye(hud.ClientSize) : RecordingHudLayout.FinishEye(hud.ClientSize);
+                return hud.RectangleToScreen(eye);
+            }
+        }
+        public override void DoDefaultAction() { hud.DoAccessibleAction(target); }
+    }
+
+    // What an eye does in the current dictation state.
+    public enum RecordingHudAction { None, Start, Finish, Retry, Cancel }
+
     // Geometry shared by painting and hit testing. Eyes are ellipses inscribed in these rectangles.
     public static class RecordingHudLayout
     {
@@ -218,6 +363,24 @@ namespace Neighbor.Windows.UI
         {
             int catHeight = CatHeight(clientSize);
             return new Rectangle((int)(clientSize.Width * .67), (int)(catHeight * .53), (int)(clientSize.Width * .19), (int)(catHeight * .29));
+        }
+
+        // Single rule for clicks, hover and accessibility. The right eye starts, finishes or retries
+        // depending on the state; the left eye cancels whenever dictation is not idle or delivering.
+        public static RecordingHudAction ActionFor(RecordingHudTarget target, DictationState state)
+        {
+            switch (target)
+            {
+                case RecordingHudTarget.Cancel:
+                    return state != DictationState.Idle && state != DictationState.Delivering ? RecordingHudAction.Cancel : RecordingHudAction.None;
+                case RecordingHudTarget.Finish:
+                    if (state == DictationState.Recording) return RecordingHudAction.Finish;
+                    if (state == DictationState.RetainedAudio) return RecordingHudAction.Retry;
+                    if (state == DictationState.Idle) return RecordingHudAction.Start;
+                    return RecordingHudAction.None;
+                default:
+                    return RecordingHudAction.None;
+            }
         }
 
         public static RecordingHudTarget HitTest(Point point, Size clientSize)
