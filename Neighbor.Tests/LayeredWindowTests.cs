@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.ComponentModel;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -76,6 +77,108 @@ namespace Neighbor.Tests
             Expect(check, "Meter fraction clamps below -60 dB to empty", () => RecordingHudLayout.LevelFraction(-80, true) == 0);
             Expect(check, "Meter fraction is empty when the level is unknown", () => RecordingHudLayout.LevelFraction(-15, false) == 0);
             Expect(check, "Meter fraction is empty for NaN input", () => RecordingHudLayout.LevelFraction(double.NaN, true) == 0);
+
+            CheckPresentFailure(check, "Present to an invalid window handle throws Win32Exception", new IntPtr(1));
+            IntPtr destroyed;
+            using (var probe = new LayeredProbe()) destroyed = probe.Handle;
+            CheckPresentFailure(check, "Present to a destroyed window handle throws Win32Exception", destroyed);
+
+            using (var probe = new LayeredProbe())
+            using (var frame = NewFrame())
+            {
+                IntPtr hwnd = probe.Handle;
+                CheckGdiStability(check, "Successful Present", () => LayeredWindow.Present(hwnd, Point.Empty, frame));
+            }
+            using (var frame = NewFrame())
+            {
+                CheckGdiStability(check, "Failed Present (invalid handle)", () =>
+                {
+                    try { LayeredWindow.Present(new IntPtr(1), Point.Empty, frame); }
+                    catch (Win32Exception) { }
+                    return true;
+                });
+            }
+        }
+
+        // Net GDI growth allowed across the measured batches. Warm-up absorbs one-time caches, and measured
+        // batch-to-batch drift was 0 in the first run. A leak of one object per Present would add about 100
+        // per 100-call batch, far above this threshold, so linear leaks are still caught.
+        private const int GdiThreshold = 4;
+        private const int WarmupCount = 100, BatchCount = 5, OperationsPerBatch = 100;
+        private const uint GR_GDIOBJECTS = 0;
+
+        [DllImport("user32.dll")] private static extern uint GetGuiResources(IntPtr process, uint flags);
+        [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+
+        private static Bitmap NewFrame()
+        {
+            return new Bitmap(340, 220, PixelFormat.Format32bppPArgb);
+        }
+
+        // The expected native error code is not fixed here; the actual value is printed for the record.
+        private static void CheckPresentFailure(Action<bool, string> check, string name, IntPtr hwnd)
+        {
+            using (var frame = NewFrame())
+            {
+                try
+                {
+                    LayeredWindow.Present(hwnd, Point.Empty, frame);
+                    check(false, name + " (no exception thrown)");
+                }
+                catch (Win32Exception error)
+                {
+                    check(error.NativeErrorCode != 0, name + " (native error " + error.NativeErrorCode + ")");
+                }
+                catch (Exception error)
+                {
+                    check(false, name + " (unexpected " + error.GetType().Name + ")");
+                }
+            }
+        }
+
+        // Warms up, then records GDI object counts over BatchCount batches. A failed measurement (0 or exception) fails the check.
+        private static void CheckGdiStability(Action<bool, string> check, string label, Func<bool> operation)
+        {
+            try
+            {
+                for (int i = 0; i < WarmupCount; i++) if (!operation()) throw new InvalidOperationException("operation failed during warm-up");
+                int baseline = MeasureGdiObjects();
+                int last = baseline;
+                for (int batch = 1; batch <= BatchCount; batch++)
+                {
+                    for (int i = 0; i < OperationsPerBatch; i++) if (!operation()) throw new InvalidOperationException("operation failed during batch " + batch);
+                    last = MeasureGdiObjects();
+                    check(true, label + " batch " + batch + ": GDI objects " + last + " (baseline " + baseline + ")");
+                }
+                check(last - baseline <= GdiThreshold, label + ": GDI growth " + (last - baseline) + ", threshold " + GdiThreshold);
+            }
+            catch (Exception error) { check(false, label + " GDI measurement failed: " + error.Message); }
+        }
+
+        private static int MeasureGdiObjects()
+        {
+            uint count = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+            if (count == 0) throw new InvalidOperationException("GetGuiResources returned 0");
+            return (int)count;
+        }
+
+        // Layered top-level window; the handle is created without being shown.
+        private sealed class LayeredProbe : Form
+        {
+            public LayeredProbe()
+            {
+                FormBorderStyle = FormBorderStyle.None;
+                ShowInTaskbar = false;
+            }
+            protected override CreateParams CreateParams
+            {
+                get
+                {
+                    var parameters = base.CreateParams;
+                    parameters.ExStyle |= 0x00080000; // WS_EX_LAYERED
+                    return parameters;
+                }
+            }
         }
 
         private static Bitmap TryRenderPanel()
